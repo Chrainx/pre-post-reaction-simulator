@@ -2,9 +2,57 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 
+type PersonaReaction = {
+  persona: 'Supporter' | 'Neutral' | 'Critic'
+  sentiment: string
+  reaction: string
+}
+
+type RiskSummary = {
+  level: string
+  summary: string
+  watchout: string
+}
+
 type AnalysisResult = {
   submittedText: string
-  summary: string
+  personas: PersonaReaction[]
+  riskSummary: RiskSummary
+}
+
+const buildMockAnalysis = (text: string): AnalysisResult => {
+  const preview = text.length > 140 ? `${text.slice(0, 137)}...` : text
+
+  return {
+    submittedText: text,
+    personas: [
+      {
+        persona: 'Supporter',
+        sentiment: 'Positive',
+        reaction:
+          `This feels exciting and easy to rally behind. "${preview}" sounds confident and shareable to people who already support the message.`,
+      },
+      {
+        persona: 'Neutral',
+        sentiment: 'Measured',
+        reaction:
+          'The message is understandable, but it could use more context or specifics before a general audience fully buys in. It reads clearly without being especially emotional.',
+      },
+      {
+        persona: 'Critic',
+        sentiment: 'Skeptical',
+        reaction:
+          'A critical audience may question whether the wording overpromises or leaves room for misunderstanding. The tone could invite pushback if the claim is not backed up.',
+      },
+    ],
+    riskSummary: {
+      level: 'Medium',
+      summary:
+        'The draft is broadly safe, but audiences could interpret it differently depending on how much context they already have.',
+      watchout:
+        'Watch for vague wording, unsupported claims, or lines that sound more confident than the evidence behind them.',
+    },
+  }
 }
 
 function App() {
@@ -19,11 +67,7 @@ function App() {
       return
     }
 
-    setResult({
-      submittedText: trimmedInput,
-      summary:
-        'Analysis placeholder ready. Next, we can swap this for persona-based reactions and risk scoring.',
-    })
+    setResult(buildMockAnalysis(trimmedInput))
   }
 
   return (
@@ -73,9 +117,30 @@ function App() {
                 <p className="block-label">Submitted text</p>
                 <p>{result.submittedText}</p>
               </div>
-              <div className="output-block">
-                <p className="block-label">System response</p>
-                <p>{result.summary}</p>
+
+              <div className="persona-grid">
+                {result.personas.map((persona) => (
+                  <article className="persona-card" key={persona.persona}>
+                    <div className="persona-card-header">
+                      <p className="block-label">{persona.persona}</p>
+                      <span className="persona-tone">{persona.sentiment}</span>
+                    </div>
+                    <p>{persona.reaction}</p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="risk-card">
+                <div className="persona-card-header">
+                  <p className="block-label">PR Risk Summary</p>
+                  <span className="persona-tone risk-tone">
+                    {result.riskSummary.level}
+                  </span>
+                </div>
+                <div className="output-block">
+                  <p>{result.riskSummary.summary}</p>
+                  <p>{result.riskSummary.watchout}</p>
+                </div>
               </div>
             </div>
           ) : (
