@@ -78,15 +78,16 @@ function ComposePage({
                 </p>
               </article>
 
-              <article className="guide-card">
-                <p className="guide-title">Checks</p>
-                <ul className="guide-list">
-                  <li>Supporter reaction</li>
-                  <li>Neutral reaction</li>
-                  <li>Critic reaction</li>
-                  <li>PR risk summary</li>
-                </ul>
-              </article>
+                <article className="guide-card">
+                  <p className="guide-title">Checks</p>
+                  <ul className="guide-list">
+                    <li>Supporter reaction</li>
+                    <li>Neutral reaction</li>
+                    <li>Critic reaction</li>
+                    <li>Sensitive audience read</li>
+                    <li>PR risk summary</li>
+                  </ul>
+                </article>
 
               <button
                 className="page-link"
