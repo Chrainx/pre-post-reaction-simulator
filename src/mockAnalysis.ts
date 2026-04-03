@@ -31,6 +31,10 @@ export const buildMockAnalysis = (text: string): AnalysisResult => {
 
   return {
     submittedText: text,
+    overallAssessment: {
+      tone: 'Cautiously positive',
+      riskLevel: 'Medium',
+    },
     personas: [
       {
         ...PERSONA_BLUEPRINTS.supporter,

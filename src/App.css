@@ -320,8 +320,9 @@
 
 .results-header .back-link {
   position: absolute;
-  left: -170px;
-  top: 0;
+  left: -190px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .output-panel {
@@ -348,14 +349,23 @@
 
 .output-overview {
   display: grid;
-  gap: 18px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.overview-side {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr);
+  align-content: start;
+  align-items: start;
 }
 
 .output-section {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--border);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.58);
@@ -403,7 +413,7 @@
 .input-summary {
   gap: 12px;
   background: rgba(255, 255, 255, 0.42);
-  grid-template-rows: auto 1fr;
+  align-content: start;
 }
 
 .input-summary .section-header h3 {
@@ -414,8 +424,7 @@
 }
 
 .draft-preview {
-  height: 100%;
-  min-height: 220px;
+  min-height: 180px;
   padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -424,9 +433,40 @@
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow: auto;
 }
 
 .draft-preview p {
+  margin: 0;
+}
+
+.status-card {
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  align-self: start;
+  height: fit-content;
+  padding-bottom: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent),
+    rgba(255, 252, 246, 0.9);
+}
+
+.status-grid {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.status-detail {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.status-detail p {
   margin: 0;
 }
 
@@ -444,8 +484,8 @@
 .persona-card,
 .risk-card {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.66);
@@ -471,6 +511,7 @@
 
 .risk-card {
   border-color: rgba(143, 45, 18, 0.18);
+  min-height: 0;
   background:
     linear-gradient(180deg, rgba(201, 92, 39, 0.12), transparent),
     rgba(255, 248, 244, 0.92);
@@ -480,15 +521,30 @@
   background: rgba(143, 45, 18, 0.14);
 }
 
+.risk-tone-safe {
+  background: rgba(36, 138, 61, 0.16);
+  color: #1f6a31;
+}
+
+.risk-tone-medium {
+  background: rgba(143, 45, 18, 0.14);
+  color: var(--accent-strong);
+}
+
+.risk-tone-risky {
+  background: rgba(168, 28, 28, 0.16);
+  color: #8b1e1e;
+}
+
 .risk-grid {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .risk-detail {
   display: grid;
-  gap: 8px;
-  padding: 16px;
+  gap: 6px;
+  padding: 12px 14px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.74);
 }
@@ -543,14 +599,25 @@
   }
 
   .results-header {
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .results-header .back-link {
     position: static;
+    justify-self: start;
+    transform: none;
   }
 
   .composer-body {
+    grid-template-columns: 1fr;
+  }
+
+  .output-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-side {
     grid-template-columns: 1fr;
   }
 }
