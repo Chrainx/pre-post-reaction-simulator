@@ -42,28 +42,55 @@ function ResultsPage({ result, onBackToEditor }: ResultsPageProps) {
                 </div>
               </section>
 
-              <section className="output-section risk-card">
-                <div className="section-header">
-                  <div>
-                    <p className="block-label">PR risk summary</p>
-                    <h3>Risk Watch</h3>
+              <div className="overview-side">
+                <section className="output-section status-card">
+                  <div className="section-header">
+                    <div>
+                      <p className="block-label">Overall assessment</p>
+                      <h3>Signal Check</h3>
+                    </div>
+                    <span
+                      className={`persona-tone risk-tone risk-tone-${result.overallAssessment.riskLevel.toLowerCase()}`}
+                    >
+                      {result.overallAssessment.riskLevel}
+                    </span>
                   </div>
-                  <span className="persona-tone risk-tone">
-                    {result.riskSummary.level}
-                  </span>
-                </div>
 
-                <div className="risk-grid">
-                  <div className="risk-detail">
-                    <p className="risk-label">Overview</p>
-                    <p>{result.riskSummary.summary}</p>
+                  <div className="status-grid">
+                    <div className="status-detail">
+                      <p className="risk-label">Overall tone</p>
+                      <p>{result.overallAssessment.tone}</p>
+                    </div>
+                    <div className="status-detail">
+                      <p className="risk-label">PR risk</p>
+                      <p>{result.riskSummary.level}</p>
+                    </div>
                   </div>
-                  <div className="risk-detail">
-                    <p className="risk-label">Watch out for</p>
-                    <p>{result.riskSummary.watchout}</p>
+                </section>
+
+                <section className="output-section risk-card">
+                  <div className="section-header">
+                    <div>
+                      <p className="block-label">PR risk summary</p>
+                      <h3>Risk Watch</h3>
+                    </div>
+                    <span className="persona-tone risk-tone">
+                      {result.riskSummary.level}
+                    </span>
                   </div>
-                </div>
-              </section>
+
+                  <div className="risk-grid">
+                    <div className="risk-detail">
+                      <p className="risk-label">Overview</p>
+                      <p>{result.riskSummary.summary}</p>
+                    </div>
+                    <div className="risk-detail">
+                      <p className="risk-label">Watch out for</p>
+                      <p>{result.riskSummary.watchout}</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
             </div>
 
             <section className="output-section analysis-main">
