@@ -1,5 +1,8 @@
+export type PersonaId = 'supporter' | 'neutral' | 'critic' | 'sensitive'
+
 export type PersonaReaction = {
-  persona: 'Supporter' | 'Neutral' | 'Critic'
+  id: PersonaId
+  persona: string
   sentiment: string
   reaction: string
 }
@@ -15,3 +18,10 @@ export type AnalysisResult = {
   personas: PersonaReaction[]
   riskSummary: RiskSummary
 }
+
+export const PERSONA_ORDER: PersonaId[] = [
+  'supporter',
+  'neutral',
+  'critic',
+  'sensitive',
+]

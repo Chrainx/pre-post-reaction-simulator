@@ -1,3 +1,4 @@
+import { PERSONA_ORDER } from './types'
 import type { AnalysisResult } from './types'
 
 type ResultsPageProps = {
@@ -6,6 +7,13 @@ type ResultsPageProps = {
 }
 
 function ResultsPage({ result, onBackToEditor }: ResultsPageProps) {
+  const orderedPersonas = result
+    ? [...result.personas].sort(
+        (left, right) =>
+          PERSONA_ORDER.indexOf(left.id) - PERSONA_ORDER.indexOf(right.id),
+      )
+    : []
+
   return (
     <section className="results-page" aria-live="polite">
       <div className="results-header">
@@ -64,11 +72,13 @@ function ResultsPage({ result, onBackToEditor }: ResultsPageProps) {
                   <p className="block-label">Persona reactions</p>
                   <h3>Audience Simulation</h3>
                 </div>
-                <span className="section-chip">3 perspectives</span>
+                <span className="section-chip">
+                  {orderedPersonas.length} perspectives
+                </span>
               </div>
 
               <div className="persona-grid">
-                {result.personas.map((persona) => (
+                {orderedPersonas.map((persona) => (
                   <article className="persona-card" key={persona.persona}>
                     <div className="persona-card-header">
                       <div>
