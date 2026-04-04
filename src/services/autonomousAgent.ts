@@ -23,6 +23,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+// Between 400ms and 2800ms — feels like real unpredictable comment arrival
+function getRandomDelay(): number {
+  return Math.floor(Math.random() * 2400) + 400
+}
+
 function makeLogEntry(
   agentName: string,
   message: string,
@@ -227,6 +232,7 @@ async function makeTakedownDecision(
   _personas: PersonaReaction[],
   synthesis: SynthesisResult,
   comments: GeneratedComment[],
+  threshold: number,
 ): Promise<TakedownDecision> {
   const abuseCount = comments.filter((c) => c.category === 'abuse').length
   const urgentCount = comments.filter((c) => c.category === 'urgent').length
@@ -239,11 +245,11 @@ async function makeTakedownDecision(
 
   if (isDemoMode()) {
     await sleep(800)
-    if (riskScore >= 60) {
+    if (riskScore >= threshold) {
       return {
         action: 'take-down',
         riskScore,
-        reasoning: `Agnes detected ${abuseCount} abusive comments and ${urgentCount} urgent flags. Aggregate risk score ${riskScore}/100 exceeds the safety threshold. Autonomous takedown initiated to protect account reputation.`,
+        reasoning: `Agnes detected ${abuseCount} abusive comments and ${urgentCount} urgent flags. Aggregate risk score ${riskScore}/100 exceeds the safety threshold of ${threshold}. Autonomous takedown initiated to protect account reputation.`,
         abuseCount,
         urgentCount,
         spamCount,
@@ -253,7 +259,7 @@ async function makeTakedownDecision(
     return {
       action: 'post-safe',
       riskScore,
-      reasoning: `Comment wave analysis shows ${supportCount} supportive reactions outweigh negative signals. Risk score ${riskScore}/100 is within acceptable range. Post is safe to remain live.`,
+      reasoning: `Comment wave analysis shows ${supportCount} supportive reactions outweigh negative signals. Risk score ${riskScore}/100 is within the acceptable threshold of ${threshold}. Post is safe to remain live.`,
       abuseCount,
       urgentCount,
       spamCount,
@@ -267,9 +273,10 @@ Original post: "${postText}"
 Pre-post risk assessment: ${synthesis.risk_level} risk — "${synthesis.what_could_go_wrong}"
 Comment analysis: ${abuseCount} abusive, ${urgentCount} urgent/serious, ${spamCount} spam, ${supportCount} supportive
 Aggregate risk score: ${riskScore}/100
+Takedown threshold: ${threshold}/100
 
 Make an autonomous decision: should this post be taken down?
-Consider: risk score above 60 = take down. Below 40 = safe. Between = use judgment.
+Consider: risk score at or above ${threshold} = take down. Well below = safe. Use judgment in between.
 
 Return JSON only:
 {
@@ -292,7 +299,7 @@ Return JSON only:
     const action =
       parsed.action === 'take-down' || parsed.action === 'post-safe'
         ? parsed.action
-        : riskScore >= 60
+        : riskScore >= threshold
           ? 'take-down'
           : 'post-safe'
     const reasoning =
@@ -303,9 +310,9 @@ Return JSON only:
     return { action, riskScore, reasoning, abuseCount, urgentCount, spamCount, supportCount }
   } catch {
     return {
-      action: riskScore >= 60 ? 'take-down' : 'post-safe',
+      action: riskScore >= threshold ? 'take-down' : 'post-safe',
       riskScore,
-      reasoning: `Autonomous decision based on risk score ${riskScore}/100. ${riskScore >= 60 ? 'Takedown initiated.' : 'Post remains live.'}`,
+      reasoning: `Autonomous decision based on risk score ${riskScore}/100. ${riskScore >= threshold ? 'Takedown initiated.' : 'Post remains live.'}`,
       abuseCount,
       urgentCount,
       spamCount,
@@ -314,12 +321,42 @@ Return JSON only:
   }
 }
 
+// Finalise pipeline after Agent 9 decision — shared by both early and end-of-stream paths
+async function finalisePipeline(
+  state: AutonomousPipelineState,
+  decision: TakedownDecision,
+  demo: boolean,
+  log: (agentName: string, message: string, type?: AgentLogEntry['type']) => void,
+  onProgress: (s: AutonomousPipelineState) => void,
+  _threshold: number,
+): Promise<AutonomousPipelineState> {
+  let s = { ...state, decision }
+
+  if (decision.action === 'take-down') {
+    log('Agent 9', `Risk score ${decision.riskScore}/100 — threshold exceeded`, 'warning')
+    log('Agent 9', 'Initiating autonomous takedown sequence...', 'action')
+    onProgress({ ...s })
+
+    if (demo) await sleep(600)
+
+    log('Agent 9', '✓ POST HIDDEN — Agnes acted autonomously. Account protected.', 'success')
+    s = { ...s, status: 'taken-down', completedAt: Date.now() }
+  } else {
+    log('Agent 9', '✓ POST SAFE — Agnes determined risk is acceptable. No action taken.', 'success')
+    s = { ...s, status: 'safe', completedAt: Date.now() }
+  }
+
+  onProgress({ ...s })
+  return s
+}
+
 export async function runAutonomousPipeline(
   postText: string,
   platform: Platform,
   region: Region,
   personas: PersonaReaction[],
   synthesis: SynthesisResult,
+  threshold: number,
   onProgress: (state: AutonomousPipelineState) => void,
 ): Promise<AutonomousPipelineState> {
   const demo = isDemoMode()
@@ -332,13 +369,13 @@ export async function runAutonomousPipeline(
     currentAgent: 7,
     generatedComments: [],
     riskScore: 0,
+    threshold,
     decision: null,
     agentLog: [],
     startedAt: Date.now(),
     completedAt: null,
   }
 
-  // Mutates `state` in place (pure reassignment, no external side effects)
   function log(agentName: string, message: string, type: AgentLogEntry['type'] = 'info'): void {
     state = { ...state, agentLog: [...state.agentLog, makeLogEntry(agentName, message, type)] }
   }
@@ -361,7 +398,9 @@ export async function runAutonomousPipeline(
   onProgress({ ...state })
   if (demo) await sleep(500)
 
-  // ── Agent 8 — Classify each comment ──────────────────────────────────────
+  // ── Agent 8 — Classify each comment, with early-exit if threshold crossed ─
+  let earlyExited = false
+
   for (let i = 0; i < rawComments.length; i++) {
     const text = rawComments[i]
     const { risk, category } = await classifyComment(text)
@@ -381,38 +420,45 @@ export async function runAutonomousPipeline(
     log('Agent 8', `[${category}] "${truncated}" → risk: ${risk}`)
     state = { ...state, generatedComments: newComments, riskScore: newRiskScore }
 
-    if (newRiskScore >= 60 && state.status !== 'flagged' && state.status !== 'taken-down') {
-      log('Agent 8', `⚠️ Risk threshold approaching — ${newRiskScore}/100`, 'warning')
+    // First time crossing threshold — flag it
+    if (newRiskScore >= threshold && state.status !== 'flagged' && state.status !== 'taken-down') {
       state = { ...state, status: 'flagged' }
     }
 
     onProgress({ ...state })
-    if (demo && i < rawComments.length - 1) await sleep(300)
+
+    // ── Early Agent 9 trigger ──────────────────────────────────────────────
+    if (newRiskScore >= threshold && state.decision === null) {
+      const remaining = rawComments.length - i - 1
+      log('Agent 8', '⚠️ Risk threshold crossed mid-stream — Agent 9 activating early', 'warning')
+      if (remaining > 0) {
+        log('Agent 8', `Pipeline halted — ${remaining} comment${remaining === 1 ? '' : 's'} unread`, 'warning')
+      }
+      state = { ...state, currentAgent: 9 }
+      onProgress({ ...state })
+
+      if (demo) await sleep(1500)
+
+      const decision = await makeTakedownDecision(postText, personas, synthesis, state.generatedComments, threshold)
+      state = await finalisePipeline(state, decision, demo, log, onProgress, threshold)
+      earlyExited = true
+      break
+    }
+
+    // Random delay between comments in demo mode; 0ms in real mode (webhook-driven)
+    if (demo && i < rawComments.length - 1) await sleep(getRandomDelay())
   }
 
-  // ── Agent 9 — Takedown Decision ───────────────────────────────────────────
+  if (earlyExited) {
+    return state
+  }
+
+  // ── Agent 9 — Normal end-of-stream decision ───────────────────────────────
   log('Agent 9', 'All comments classified — running autonomous decision engine...')
   state = { ...state, currentAgent: 9 }
   onProgress({ ...state })
   if (demo) await sleep(1500)
 
-  const decision = await makeTakedownDecision(postText, personas, synthesis, state.generatedComments)
-  state = { ...state, decision }
-
-  if (decision.action === 'take-down') {
-    log('Agent 9', `Risk score ${decision.riskScore}/100 — threshold exceeded`, 'warning')
-    log('Agent 9', 'Initiating autonomous takedown sequence...', 'action')
-    onProgress({ ...state })
-
-    if (demo) await sleep(600)
-
-    log('Agent 9', '✓ POST HIDDEN — Agnes acted autonomously. Account protected.', 'success')
-    state = { ...state, status: 'taken-down', completedAt: Date.now() }
-  } else {
-    log('Agent 9', '✓ POST SAFE — Agnes determined risk is acceptable. No action taken.', 'success')
-    state = { ...state, status: 'safe', completedAt: Date.now() }
-  }
-
-  onProgress({ ...state })
-  return state
+  const decision = await makeTakedownDecision(postText, personas, synthesis, state.generatedComments, threshold)
+  return finalisePipeline(state, decision, demo, log, onProgress, threshold)
 }

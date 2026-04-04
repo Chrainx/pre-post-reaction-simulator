@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import ComposePage from './ComposePage'
-import MonitorPage from './MonitorPage'
 import PipelinePage from './PipelinePage'
 import ResultsPage from './ResultsPage'
 import {
@@ -46,12 +45,13 @@ function createLoadingPersonaStates(): PersonaCardState[] {
   }))
 }
 
-function createInitialPipelineState(): AutonomousPipelineState {
+function createInitialPipelineState(threshold = 60): AutonomousPipelineState {
   return {
     status: 'running',
     currentAgent: 7,
     generatedComments: [],
     riskScore: 0,
+    threshold,
     decision: null,
     agentLog: [],
     startedAt: null,
@@ -72,12 +72,12 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isSynthesizing, setIsSynthesizing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [view, setView] = useState<'compose' | 'results' | 'monitor' | 'pipeline'>('compose')
-  const [canMonitor, setCanMonitor] = useState(false)
+  const [view, setView] = useState<'compose' | 'results' | 'pipeline'>('compose')
   const [completedPersonas, setCompletedPersonas] = useState<PersonaReaction[]>([])
   const [completedSynthesis, setCompletedSynthesis] = useState<SynthesisResult | null>(null)
+  const [threshold, setThreshold] = useState(60)
   const [pipelineState, setPipelineState] = useState<AutonomousPipelineState>(
-    createInitialPipelineState,
+    () => createInitialPipelineState(60),
   )
   const runIdRef = useRef(0)
 
@@ -125,7 +125,6 @@ function App() {
     setLastRegion(nextRegion)
     setPersonaStates(createLoadingPersonaStates())
     setSynthesis(null)
-    setCanMonitor(false)
     setCompletedPersonas([])
     setCompletedSynthesis(null)
     setPipelineState(createInitialPipelineState())
@@ -179,10 +178,6 @@ function App() {
       setSynthesis(nextSynthesis)
       setCompletedPersonas(reactions)
       setCompletedSynthesis(nextSynthesis)
-
-      if (nextSynthesis.risk_level === 'medium' || nextSynthesis.risk_level === 'high') {
-        setCanMonitor(true)
-      }
     } finally {
       if (runIdRef.current === runId) {
         setIsAnalyzing(false)
@@ -206,9 +201,13 @@ function App() {
   }
 
   const handleRunPipeline = () => {
-    setPipelineState(createInitialPipelineState())
+    setPipelineState(createInitialPipelineState(threshold))
     setView('pipeline')
   }
+
+  const canRunPipeline =
+    completedSynthesis !== null &&
+    (completedSynthesis.risk_level === 'medium' || completedSynthesis.risk_level === 'high')
 
   return (
     <main className="app-shell">
@@ -245,11 +244,8 @@ function App() {
           errorMessage={errorMessage}
           onBackToEditor={() => setView('compose')}
           onReAnalyze={handleReAnalyze}
-          onEnableMonitor={canMonitor ? () => setView('monitor') : undefined}
-          onRunPipeline={canMonitor ? handleRunPipeline : undefined}
+          onRunPipeline={canRunPipeline ? handleRunPipeline : undefined}
         />
-      ) : view === 'monitor' ? (
-        <MonitorPage postText={submittedText} onBack={() => setView('results')} />
       ) : completedSynthesis ? (
         <PipelinePage
           postText={submittedText}
@@ -258,6 +254,8 @@ function App() {
           personas={completedPersonas}
           synthesis={completedSynthesis}
           pipelineState={pipelineState}
+          threshold={threshold}
+          onThresholdChange={setThreshold}
           onProgress={setPipelineState}
           onBack={() => setView('results')}
         />
