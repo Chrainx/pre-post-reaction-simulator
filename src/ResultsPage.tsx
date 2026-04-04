@@ -1,97 +1,186 @@
-import { PERSONA_ORDER } from './types'
-import type { AnalysisResult } from './types'
+import type {
+  PersonaName,
+  PersonaReaction,
+  Platform,
+  Region,
+  SynthesisResult,
+  ToneLevel,
+} from './types/personas'
+
+type PersonaCardState = {
+  name: PersonaName
+  status: 'idle' | 'loading' | 'ready'
+  reaction: PersonaReaction | null
+}
 
 type ResultsPageProps = {
-  result: AnalysisResult | null
+  submittedText: string
+  platform: Platform
+  region: Region
+  personaStates: PersonaCardState[]
+  synthesis: SynthesisResult | null
+  isAnalyzing: boolean
+  isSynthesizing: boolean
+  errorMessage: string | null
   onBackToEditor: () => void
 }
 
-function ResultsPage({ result, onBackToEditor }: ResultsPageProps) {
-  const orderedPersonas = result
-    ? [...result.personas].sort(
-        (left, right) =>
-          PERSONA_ORDER.indexOf(left.id) - PERSONA_ORDER.indexOf(right.id),
-      )
-    : []
+function formatPlatform(platform: Platform): string {
+  if (platform === 'twitter') {
+    return 'Twitter'
+  }
+
+  if (platform === 'linkedin') {
+    return 'LinkedIn'
+  }
+
+  return 'Instagram'
+}
+
+function recommendationLabel(recommendation: SynthesisResult['recommendation']) {
+  if (recommendation === 'post') {
+    return 'Post it'
+  }
+
+  if (recommendation === 'edit') {
+    return 'Edit first'
+  }
+
+  return 'Reconsider'
+}
+
+function recommendationSupportText(
+  recommendation: SynthesisResult['recommendation'],
+) {
+  if (recommendation === 'post') {
+    return '✓ Looks good — safe to publish'
+  }
+
+  if (recommendation === 'edit') {
+    return '✍ Small changes recommended before posting'
+  }
+
+  return '⚠ High risk — significant revision needed'
+}
+
+function toneClassName(tone: ToneLevel): string {
+  return `persona-card-tone-${tone}`
+}
+
+function riskClassName(riskLevel: SynthesisResult['risk_level']): string {
+  return `risk-accent-${riskLevel}`
+}
+
+function displayPersonaName(name: PersonaName): string {
+  return name === 'Brand / Sponsor' ? 'Brand/Sponsor' : name
+}
+
+function ResultsPage({
+  submittedText,
+  platform,
+  region,
+  personaStates,
+  synthesis,
+  isAnalyzing,
+  isSynthesizing,
+  errorMessage,
+  onBackToEditor,
+}: ResultsPageProps) {
+  const hasRun = submittedText.trim().length > 0
 
   return (
     <section className="results-page" aria-live="polite">
       <div className="results-header">
-        <button className="back-link" type="button" onClick={onBackToEditor}>
-          Back to editor
-        </button>
         <div className="output-heading">
           <p className="output-kicker">Output</p>
           <h2>Analysis Result</h2>
+          <p className="results-context-note">
+            {region === 'singapore'
+              ? 'SEA mode active'
+              : `${formatPlatform(platform)} · Global audience`}
+          </p>
+        </div>
+        <div className="results-actions">
+          <button className="back-link" type="button" onClick={onBackToEditor}>
+            Back to editor
+          </button>
         </div>
       </div>
 
-      {result ? (
-        <section className="output-panel">
-          <div className="output-card">
-            <div className="output-overview">
-              <section className="output-section input-summary">
+      <div className="results-main">
+        {!hasRun ? (
+          <div className="empty-state">
+            <div className="empty-state-content">
+              <p className="block-label">No analysis yet</p>
+              <h3>Run a draft first.</h3>
+              <p>
+                Head back to the editor, paste a post, and launch the multi-agent
+                run.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <section className="output-panel">
+            {errorMessage ? (
+              <div className="notice-banner results-notice" role="status">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            <div className="output-card">
+              <section className="output-section draft-card">
                 <div className="section-header">
                   <div>
                     <p className="block-label">Submitted text</p>
                     <h3>Draft Preview</h3>
                   </div>
+                  <span className="section-chip">{formatPlatform(platform)}</span>
                 </div>
+
                 <div className="draft-preview">
-                  <p>{result.submittedText}</p>
+                  <p>{submittedText}</p>
                 </div>
               </section>
 
-              <div className="overview-side">
-                <section className="output-section status-card">
-                  <div className="section-header">
-                    <div>
-                      <p className="block-label">Overall assessment</p>
-                      <h3>Signal Check</h3>
+              {synthesis ? (
+                synthesis.risk_level === 'low' ? (
+                  <section className="risk-banner risk-banner-low">
+                    <p className="risk-banner-title">Safe to post</p>
+                    <p>
+                      Agnes-Claw sees low immediate PR risk across the five
+                      persona agents.
+                    </p>
+                  </section>
+                ) : (
+                  <section
+                    className={`risk-banner ${
+                      synthesis.risk_level === 'high'
+                        ? 'risk-banner-high'
+                        : 'risk-banner-medium'
+                    }`}
+                  >
+                    <p className="risk-banner-title">
+                      {synthesis.risk_level === 'high'
+                        ? 'High PR risk'
+                        : 'Medium PR risk'}
+                    </p>
+                    <p>{synthesis.what_could_go_wrong}</p>
+                    <div className="risk-banner-headline-group">
+                      <p className="risk-banner-headline-label">
+                        Potential headline:
+                      </p>
+                      <p className="risk-banner-headline">
+                        {synthesis.headline_risk}
+                      </p>
                     </div>
-                    <span
-                      className={`persona-tone risk-tone risk-tone-${result.overallAssessment.riskLevel.toLowerCase()}`}
-                    >
-                      {result.overallAssessment.riskLevel}
-                    </span>
-                  </div>
-
-                  <div className="status-grid">
-                    <div className="status-detail">
-                      <p className="risk-label">Overall tone</p>
-                      <p>{result.overallAssessment.tone}</p>
-                    </div>
-                    <div className="status-detail">
-                      <p className="risk-label">PR risk</p>
-                      <p>{result.riskSummary.level}</p>
-                    </div>
-                  </div>
+                  </section>
+                )
+              ) : isSynthesizing ? (
+                <section className="risk-banner risk-banner-pending">
+                  <p className="risk-banner-title">Synthesizing reactions</p>
+                  <p>The PR analyst agent is combining all five persona reads.</p>
                 </section>
-
-                <section className="output-section risk-card">
-                  <div className="section-header">
-                    <div>
-                      <p className="block-label">PR risk summary</p>
-                      <h3>Risk Watch</h3>
-                    </div>
-                    <span className="persona-tone risk-tone">
-                      {result.riskSummary.level}
-                    </span>
-                  </div>
-
-                  <div className="risk-grid">
-                    <div className="risk-detail">
-                      <p className="risk-label">Overview</p>
-                      <p>{result.riskSummary.summary}</p>
-                    </div>
-                    <div className="risk-detail">
-                      <p className="risk-label">Watch out for</p>
-                      <p>{result.riskSummary.watchout}</p>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </div>
+              ) : null}
 
             <section className="output-section analysis-main">
               <div className="section-header">
@@ -99,37 +188,109 @@ function ResultsPage({ result, onBackToEditor }: ResultsPageProps) {
                   <p className="block-label">Persona reactions</p>
                   <h3>Audience Simulation</h3>
                 </div>
-                <span className="section-chip">
-                  {orderedPersonas.length} perspectives
-                </span>
+                <span className="section-chip">5 agents · Agnes-Claw</span>
               </div>
 
-              <div className="persona-grid">
-                {orderedPersonas.map((persona) => (
-                  <article className="persona-card" key={persona.persona}>
-                    <div className="persona-card-header">
-                      <div>
-                        <p className="block-label">{persona.persona}</p>
-                        <h4>{persona.persona} reaction</h4>
+              {isAnalyzing ? (
+                <div className="agent-status-line">
+                  <span className="agent-status-dot" aria-hidden="true" />
+                  Running 5 audience agents...
+                </div>
+              ) : null}
+
+              <div className="persona-strip">
+                {personaStates.map((entry) =>
+                  entry.status === 'ready' && entry.reaction ? (
+                    <article
+                      className={`persona-card ${toneClassName(entry.reaction.tone)}`}
+                      key={entry.name}
+                    >
+                        <div className="persona-card-header">
+                          <div className="persona-card-title">
+                            <p className="block-label">
+                              {displayPersonaName(entry.reaction.name)}
+                            </p>
+                            <h4>{displayPersonaName(entry.reaction.name)}</h4>
+                          </div>
+                          <div className="persona-card-badges">
+                            <span className="tone-chip">{entry.reaction.tone}</span>
+                          </div>
+                        </div>
+
+                      <p className="persona-comment">{entry.reaction.comment}</p>
+
+                      <div className="persona-footer">
+                        <p>{entry.reaction.reasoning}</p>
+                        <span className="risk-mini-chip">
+                          Risk: {entry.reaction.risk}
+                        </span>
                       </div>
-                      <span className="persona-tone">{persona.sentiment}</span>
-                    </div>
-                    <p>{persona.reaction}</p>
-                  </article>
-                ))}
+                    </article>
+                  ) : (
+                    <article className="persona-card persona-card-loading" key={entry.name}>
+                      <div className="persona-card-header">
+                        <div className="persona-card-title">
+                          <p className="block-label">
+                            {displayPersonaName(entry.name)}
+                          </p>
+                          <h4>{displayPersonaName(entry.name)}</h4>
+                        </div>
+                        <div className="persona-card-badges">
+                          <span className="tone-chip">loading</span>
+                        </div>
+                      </div>
+
+                      <div className="skeleton-line skeleton-line-long" />
+                      <div className="skeleton-line skeleton-line-medium" />
+                      <div className="skeleton-line skeleton-line-short" />
+                    </article>
+                  ),
+                )}
               </div>
             </section>
-          </div>
-        </section>
-      ) : (
-        <div className="empty-state">
-          <div className="empty-state-content">
-            <p className="block-label">No analysis yet</p>
-            <h3>Create a draft first.</h3>
-            <p>Go back to the editor and run the simulator to see results.</p>
-          </div>
-        </div>
-      )}
+
+              {synthesis ? (
+                <>
+                  <section className="synthesis-grid">
+                    <article className={`synthesis-card ${riskClassName(synthesis.risk_level)}`}>
+                      <p className="guide-title">⚠️ What could go wrong</p>
+                      <p>{synthesis.what_could_go_wrong}</p>
+                    </article>
+
+                    <article className={`synthesis-card ${riskClassName(synthesis.risk_level)}`}>
+                      <p className="guide-title">📣 Who amplifies</p>
+                      <p>{synthesis.who_amplifies}</p>
+                    </article>
+
+                    <article className={`synthesis-card ${riskClassName(synthesis.risk_level)}`}>
+                      <p className="guide-title">📰 Headline risk</p>
+                      <p>{synthesis.headline_risk}</p>
+                    </article>
+                  </section>
+
+                  <div className="recommendation-row">
+                    <p className="recommendation-copy">
+                      {recommendationSupportText(synthesis.recommendation)}
+                    </p>
+                    <button
+                      className={`recommendation-button recommendation-${synthesis.recommendation}`}
+                      type="button"
+                    >
+                      {recommendationLabel(synthesis.recommendation)}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+
+              {isAnalyzing && !synthesis ? (
+                <p className="helper-text results-helper">
+                  Persona agents are still resolving. Cards fill in one by one.
+                </p>
+              ) : null}
+            </div>
+          </section>
+        )}
+      </div>
     </section>
   )
 }
