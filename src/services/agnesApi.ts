@@ -5,7 +5,6 @@ import type {
   Platform,
   Region,
   RiskLevel,
-  SimulationResult,
   SynthesisResult,
   ToneLevel,
 } from '../types/personas'
@@ -159,7 +158,7 @@ function extractTextFromContent(
     .join('\n')
 }
 
-async function callModel(prompt: string): Promise<string> {
+export async function callModel(prompt: string, maxTokens = 600): Promise<string> {
   const configError = getApiKeyError()
   if (configError) {
     throw new Error(configError)
@@ -191,7 +190,7 @@ async function callModel(prompt: string): Promise<string> {
           isAnthropic
             ? {
                 model: MODEL,
-                max_tokens: 600,
+                max_tokens: maxTokens,
                 messages: [{ role: 'user', content: prompt }],
               }
             : {
@@ -596,21 +595,6 @@ export async function runSynthesisAgent(
   return buildFallbackSynthesis(
     'The synthesis agent answered, but the JSON shape was invalid.',
   )
-}
-
-export async function runFullSimulation(
-  postText: string,
-  platform: Platform,
-  region: Region,
-): Promise<SimulationResult> {
-  const personas = await Promise.all(
-    PERSONA_ORDER.map((personaName) =>
-      simulatePersona(personaName, postText, platform, region),
-    ),
-  )
-  const synthesis = await runSynthesisAgent(postText, personas)
-
-  return { personas, synthesis }
 }
 
 export { buildFallbackReaction, buildFallbackSynthesis, PERSONA_ORDER }

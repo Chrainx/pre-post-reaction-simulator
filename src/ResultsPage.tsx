@@ -1,17 +1,11 @@
 import type {
+  PersonaCardState,
   PersonaName,
-  PersonaReaction,
   Platform,
   Region,
   SynthesisResult,
   ToneLevel,
 } from './types/personas'
-
-type PersonaCardState = {
-  name: PersonaName
-  status: 'idle' | 'loading' | 'ready'
-  reaction: PersonaReaction | null
-}
 
 type ResultsPageProps = {
   submittedText: string
@@ -23,6 +17,9 @@ type ResultsPageProps = {
   isSynthesizing: boolean
   errorMessage: string | null
   onBackToEditor: () => void
+  onReAnalyze: () => void
+  onEnableMonitor?: () => void
+  onRunPipeline?: () => void
 }
 
 function formatPlatform(platform: Platform): string {
@@ -85,8 +82,35 @@ function ResultsPage({
   isSynthesizing,
   errorMessage,
   onBackToEditor,
+  onReAnalyze,
+  onEnableMonitor,
+  onRunPipeline,
 }: ResultsPageProps) {
   const hasRun = submittedText.trim().length > 0
+  const readyReactions = personaStates
+    .filter(
+      (entry): entry is PersonaCardState & { status: 'ready'; reaction: NonNullable<PersonaCardState['reaction']> } =>
+        entry.status === 'ready' && entry.reaction !== null,
+    )
+    .map((entry) => entry.reaction)
+  const toneCounts: Array<{ tone: ToneLevel; count: number }> = [
+    {
+      tone: 'warm' as ToneLevel,
+      count: readyReactions.filter((entry) => entry.tone === 'warm').length,
+    },
+    {
+      tone: 'neutral' as ToneLevel,
+      count: readyReactions.filter((entry) => entry.tone === 'neutral').length,
+    },
+    {
+      tone: 'skeptical' as ToneLevel,
+      count: readyReactions.filter((entry) => entry.tone === 'skeptical').length,
+    },
+    {
+      tone: 'hostile' as ToneLevel,
+      count: readyReactions.filter((entry) => entry.tone === 'hostile').length,
+    },
+  ].filter((entry) => entry.count > 0)
 
   return (
     <section className="results-page" aria-live="polite">
@@ -103,6 +127,9 @@ function ResultsPage({
         <div className="results-actions">
           <button className="back-link" type="button" onClick={onBackToEditor}>
             Back to editor
+          </button>
+          <button className="back-link rerun-link" type="button" onClick={onReAnalyze}>
+            ↺ Re-run
           </button>
         </div>
       </div>
@@ -198,6 +225,20 @@ function ResultsPage({
                 </div>
               ) : null}
 
+              {!isAnalyzing && toneCounts.length > 0 ? (
+                <div className="tone-summary" aria-label="Tone distribution summary">
+                  {toneCounts.map(({ tone, count }) => (
+                    <span className="tone-summary-item" key={tone}>
+                      <span
+                        className={`tone-summary-dot tone-summary-dot-${tone}`}
+                        aria-hidden="true"
+                      />
+                      {count} {tone}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="persona-strip">
                 {personaStates.map((entry) =>
                   entry.status === 'ready' && entry.reaction ? (
@@ -272,12 +313,38 @@ function ResultsPage({
                     <p className="recommendation-copy">
                       {recommendationSupportText(synthesis.recommendation)}
                     </p>
-                    <button
-                      className={`recommendation-button recommendation-${synthesis.recommendation}`}
-                      type="button"
-                    >
-                      {recommendationLabel(synthesis.recommendation)}
-                    </button>
+                    <div className="recommendation-actions">
+                      <button
+                        className={`recommendation-button recommendation-${synthesis.recommendation}`}
+                        type="button"
+                        title="This is a display indicator, not an action"
+                      >
+                        {recommendationLabel(synthesis.recommendation)}
+                      </button>
+                      {onEnableMonitor && synthesis.risk_level !== 'low' ? (
+                        <button
+                          className="monitor-enable-button"
+                          type="button"
+                          onClick={onEnableMonitor}
+                        >
+                          🛡 Enable live monitor
+                        </button>
+                      ) : null}
+                    </div>
+                    {onRunPipeline && synthesis.risk_level !== 'low' ? (
+                      <div className="pipeline-cta">
+                        <button
+                          className="pipeline-run-button"
+                          type="button"
+                          onClick={onRunPipeline}
+                        >
+                          🤖 Run autonomous protection
+                        </button>
+                        <p className="pipeline-cta-note">
+                          Agnes will monitor and act autonomously
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 </>
               ) : null}
