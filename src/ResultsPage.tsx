@@ -18,7 +18,6 @@ type ResultsPageProps = {
   errorMessage: string | null
   onBackToEditor: () => void
   onReAnalyze: () => void
-  onEnableMonitor?: () => void
   onRunPipeline?: () => void
 }
 
@@ -83,7 +82,6 @@ function ResultsPage({
   errorMessage,
   onBackToEditor,
   onReAnalyze,
-  onEnableMonitor,
   onRunPipeline,
 }: ResultsPageProps) {
   const hasRun = submittedText.trim().length > 0
@@ -313,24 +311,13 @@ function ResultsPage({
                     <p className="recommendation-copy">
                       {recommendationSupportText(synthesis.recommendation)}
                     </p>
-                    <div className="recommendation-actions">
-                      <button
-                        className={`recommendation-button recommendation-${synthesis.recommendation}`}
-                        type="button"
-                        title="This is a display indicator, not an action"
-                      >
-                        {recommendationLabel(synthesis.recommendation)}
-                      </button>
-                      {onEnableMonitor && synthesis.risk_level !== 'low' ? (
-                        <button
-                          className="monitor-enable-button"
-                          type="button"
-                          onClick={onEnableMonitor}
-                        >
-                          🛡 Enable live monitor
-                        </button>
-                      ) : null}
-                    </div>
+                    <button
+                      className={`recommendation-button recommendation-${synthesis.recommendation}`}
+                      type="button"
+                      title="This is a display indicator, not an action"
+                    >
+                      {recommendationLabel(synthesis.recommendation)}
+                    </button>
                     {onRunPipeline && synthesis.risk_level !== 'low' ? (
                       <div className="pipeline-cta">
                         <button
