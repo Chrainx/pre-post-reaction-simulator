@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import ComposePage from './ComposePage'
+import MonitorPage from './MonitorPage'
+import PipelinePage from './PipelinePage'
 import ResultsPage from './ResultsPage'
 import {
   PERSONA_ORDER,
@@ -12,19 +14,15 @@ import {
   simulatePersona,
 } from './services/agnesApi'
 import type {
+  PersonaCardState,
   PersonaName,
   PersonaReaction,
   Platform,
   Region,
   SynthesisResult,
 } from './types/personas'
+import type { AutonomousPipelineState } from './types/monitor'
 import './App.css'
-
-type PersonaCardState = {
-  name: PersonaName
-  status: 'idle' | 'loading' | 'ready'
-  reaction: PersonaReaction | null
-}
 
 const EXAMPLE_POSTS = [
   'Hot take: degrees are becoming useless. The best developers I know are self-taught. Universities are just expensive networking events at this point.',
@@ -48,6 +46,19 @@ function createLoadingPersonaStates(): PersonaCardState[] {
   }))
 }
 
+function createInitialPipelineState(): AutonomousPipelineState {
+  return {
+    status: 'running',
+    currentAgent: 7,
+    generatedComments: [],
+    riskScore: 0,
+    decision: null,
+    agentLog: [],
+    startedAt: null,
+    completedAt: null,
+  }
+}
+
 function App() {
   const [input, setInput] = useState('')
   const [platform, setPlatform] = useState<Platform>('twitter')
@@ -61,7 +72,13 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isSynthesizing, setIsSynthesizing] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [view, setView] = useState<'compose' | 'results'>('compose')
+  const [view, setView] = useState<'compose' | 'results' | 'monitor' | 'pipeline'>('compose')
+  const [canMonitor, setCanMonitor] = useState(false)
+  const [completedPersonas, setCompletedPersonas] = useState<PersonaReaction[]>([])
+  const [completedSynthesis, setCompletedSynthesis] = useState<SynthesisResult | null>(null)
+  const [pipelineState, setPipelineState] = useState<AutonomousPipelineState>(
+    createInitialPipelineState,
+  )
   const runIdRef = useRef(0)
 
   const hasLatestResults = submittedText.trim().length > 0
@@ -90,11 +107,12 @@ function App() {
     )
   }
 
-  // Issue #7: update persona cards incrementally while the full Promise.all batch resolves.
-  const handleAnalyze = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-
-    const trimmedInput = input.trim()
+  const runAnalysis = async (
+    nextText: string,
+    nextPlatform: Platform,
+    nextRegion: Region,
+  ) => {
+    const trimmedInput = nextText.trim()
     if (!trimmedInput) {
       return
     }
@@ -103,10 +121,14 @@ function App() {
     runIdRef.current = runId
 
     setSubmittedText(trimmedInput)
-    setLastPlatform(platform)
-    setLastRegion(region)
+    setLastPlatform(nextPlatform)
+    setLastRegion(nextRegion)
     setPersonaStates(createLoadingPersonaStates())
     setSynthesis(null)
+    setCanMonitor(false)
+    setCompletedPersonas([])
+    setCompletedSynthesis(null)
+    setPipelineState(createInitialPipelineState())
     setErrorMessage(null)
     setIsAnalyzing(true)
     setIsSynthesizing(true)
@@ -114,7 +136,7 @@ function App() {
 
     try {
       const personaPromises = PERSONA_ORDER.map((personaName) =>
-        simulatePersona(personaName, trimmedInput, platform, region)
+        simulatePersona(personaName, trimmedInput, nextPlatform, nextRegion)
           .then((reaction) => {
             updatePersonaCard(runId, personaName, reaction)
             return reaction
@@ -155,6 +177,12 @@ function App() {
       }
 
       setSynthesis(nextSynthesis)
+      setCompletedPersonas(reactions)
+      setCompletedSynthesis(nextSynthesis)
+
+      if (nextSynthesis.risk_level === 'medium' || nextSynthesis.risk_level === 'high') {
+        setCanMonitor(true)
+      }
     } finally {
       if (runIdRef.current === runId) {
         setIsAnalyzing(false)
@@ -163,8 +191,23 @@ function App() {
     }
   }
 
+  // Issue #7: update persona cards incrementally while the full Promise.all batch resolves.
+  const handleAnalyze = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await runAnalysis(input, platform, region)
+  }
+
+  const handleReAnalyze = async () => {
+    await runAnalysis(submittedText, lastPlatform, lastRegion)
+  }
+
   const handleExampleSelect = (post: string) => {
     setInput(post)
+  }
+
+  const handleRunPipeline = () => {
+    setPipelineState(createInitialPipelineState())
+    setView('pipeline')
   }
 
   return (
@@ -190,7 +233,7 @@ function App() {
           onViewResults={() => setView('results')}
           onExampleSelect={handleExampleSelect}
         />
-      ) : (
+      ) : view === 'results' ? (
         <ResultsPage
           submittedText={submittedText}
           platform={lastPlatform}
@@ -201,8 +244,24 @@ function App() {
           isSynthesizing={isSynthesizing}
           errorMessage={errorMessage}
           onBackToEditor={() => setView('compose')}
+          onReAnalyze={handleReAnalyze}
+          onEnableMonitor={canMonitor ? () => setView('monitor') : undefined}
+          onRunPipeline={canMonitor ? handleRunPipeline : undefined}
         />
-      )}
+      ) : view === 'monitor' ? (
+        <MonitorPage postText={submittedText} onBack={() => setView('results')} />
+      ) : completedSynthesis ? (
+        <PipelinePage
+          postText={submittedText}
+          platform={lastPlatform}
+          region={lastRegion}
+          personas={completedPersonas}
+          synthesis={completedSynthesis}
+          pipelineState={pipelineState}
+          onProgress={setPipelineState}
+          onBack={() => setView('results')}
+        />
+      ) : null}
     </main>
   )
 }

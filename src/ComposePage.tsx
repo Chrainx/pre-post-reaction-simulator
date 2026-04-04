@@ -2,6 +2,12 @@ import type { FormEvent } from 'react'
 import { PLATFORM_OPTIONS } from './types/personas'
 import type { Platform, Region } from './types/personas'
 
+const PLATFORM_LIMITS: Record<Platform, number> = {
+  twitter: 280,
+  linkedin: 3000,
+  instagram: 2200,
+}
+
 type ComposePageProps = {
   input: string
   platform: Platform
@@ -37,6 +43,9 @@ function ComposePage({
 }: ComposePageProps) {
   const singaporeMode = region === 'singapore'
   const analyzeDisabled = !input.trim() || isAnalyzing
+  const characterCount = input.length
+  const characterLimit = PLATFORM_LIMITS[platform]
+  const usageRatio = characterCount / characterLimit
   const analyzeLabel = demoMode
     ? isAnalyzing
       ? 'Running demo...'
@@ -135,9 +144,32 @@ function ComposePage({
                 className="post-input"
                 value={input}
                 onChange={(event) => onInputChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    (event.metaKey || event.ctrlKey) &&
+                    event.key === 'Enter' &&
+                    !analyzeDisabled
+                  ) {
+                    event.currentTarget.form?.requestSubmit()
+                  }
+                }}
                 placeholder="Type or paste the post you want Agnes-Claw to analyze..."
                 rows={8}
               />
+              <div className="composer-meta-row">
+                <p
+                  className={`character-counter ${
+                    characterCount > characterLimit
+                      ? 'is-over'
+                      : usageRatio >= 0.9
+                        ? 'is-near'
+                        : ''
+                  }`}
+                >
+                  {characterCount}/{characterLimit}
+                </p>
+                <p className="shortcut-hint">⌘↵ to analyze</p>
+              </div>
 
               <div className="examples-section">
                 <p className="examples-label">Try an example</p>

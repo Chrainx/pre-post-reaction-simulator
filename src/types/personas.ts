@@ -30,6 +30,12 @@ export interface SimulationResult {
   synthesis: SynthesisResult
 }
 
+export type PersonaCardState = {
+  name: PersonaName
+  status: 'idle' | 'loading' | 'ready'
+  reaction: PersonaReaction | null
+}
+
 export type Region = 'global' | 'singapore'
 export type Platform = 'instagram' | 'linkedin' | 'twitter'
 
