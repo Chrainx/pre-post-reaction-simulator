@@ -240,9 +240,7 @@ function App() {
     setView('compose')
   }
 
-  const canRunPipeline =
-    completedSynthesis !== null &&
-    (completedSynthesis.risk_level === 'medium' || completedSynthesis.risk_level === 'high')
+  const canRunPipeline = completedSynthesis !== null
 
   return (
     <main className="app-shell">

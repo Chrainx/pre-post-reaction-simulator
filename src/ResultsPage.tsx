@@ -314,7 +314,7 @@ function ResultsPage({
                           {isRewriting ? 'Rewriting...' : '🤖 AI Rewrite'}
                         </button>
                       ) : null}
-                      {onRunPipeline && synthesis.risk_level !== 'low' ? (
+                      {onRunPipeline ? (
                         <button
                           type="button"
                           className="btn-run-pipeline"
