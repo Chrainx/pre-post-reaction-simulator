@@ -9,11 +9,11 @@ import type {
   ToneLevel,
 } from '../types/personas'
 
-// Issue #7/#8: Agnes-Claw runs each audience persona as a separate agent call.
+// Agnes-Claw runs each audience persona as a separate ZenMux agent call.
 const BASE_URL =
-  import.meta.env.VITE_AGNES_BASE_URL || 'https://api.anthropic.com'
+  import.meta.env.VITE_AGNES_BASE_URL || 'https://zenmux.ai/api/v1'
 const API_KEY = import.meta.env.VITE_AGNES_API_KEY || ''
-const MODEL = import.meta.env.VITE_AGNES_MODEL || 'claude-sonnet-4-6'
+const MODEL = import.meta.env.VITE_AGNES_MODEL || 'sapiens-ai/agnes-1.5-pro'
 const REQUEST_TIMEOUT_MS = 30_000
 
 type JsonRecord = Record<string, unknown>
@@ -21,13 +21,9 @@ type JsonRecord = Record<string, unknown>
 type OpenAICompletionResponse = {
   choices?: Array<{
     message?: {
-      content?: string | Array<{ type?: string; text?: string }>
+      content?: string
     }
   }>
-}
-
-type AnthropicResponse = {
-  content?: Array<{ type?: string; text?: string }>
 }
 
 const PERSONA_DESCRIPTIONS: Record<PersonaName, string> = {
@@ -82,7 +78,7 @@ function isRecommendation(
 }
 
 function getApiKeyError(): string | null {
-  return API_KEY.trim() ? null : 'Please set your API key in .env'
+  return API_KEY.trim() ? null : 'Please set your Agnes AI (ZenMux) API key in .env'
 }
 
 export function getAgnesConfigError(): string | null {
@@ -95,20 +91,6 @@ export function isDemoMode(): boolean {
 
 function normalizeBaseUrl(): string {
   return BASE_URL.replace(/\/+$/, '')
-}
-
-function resolveUrl(path: string): string {
-  const base = normalizeBaseUrl()
-
-  if (base.endsWith(path)) {
-    return base
-  }
-
-  if (base.endsWith('/v1') && path.startsWith('v1/')) {
-    return `${base}/${path.slice(3)}`
-  }
-
-  return `${base}/${path}`
 }
 
 function extractApiError(status: number, responseText: string): string {
@@ -142,65 +124,39 @@ function extractApiError(status: number, responseText: string): string {
   return trimmed
 }
 
-function extractTextFromContent(
-  content: string | Array<{ type?: string; text?: string }> | undefined,
-): string {
-  if (typeof content === 'string') {
-    return content
-  }
-
-  if (!Array.isArray(content)) {
-    return ''
-  }
-
-  return content
-    .map((entry) => (typeof entry.text === 'string' ? entry.text : ''))
-    .join('\n')
-}
-
-export async function callModel(prompt: string, maxTokens = 600): Promise<string> {
+export async function callModel(
+  prompt: string,
+  _maxTokens = 600,
+  imageBase64?: string,
+): Promise<string> {
   const configError = getApiKeyError()
   if (configError) {
     throw new Error(configError)
   }
 
-  const isAnthropic = normalizeBaseUrl().includes('anthropic')
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
+  const messageContent: unknown = imageBase64
+    ? [
+        { type: 'image_url', image_url: { url: imageBase64 } },
+        { type: 'text', text: prompt },
+      ]
+    : prompt
+
   try {
-    const response = await fetch(
-      isAnthropic
-        ? resolveUrl('v1/messages')
-        : resolveUrl('v1/chat/completions'),
-      {
-        method: 'POST',
-        signal: controller.signal,
-        headers: isAnthropic
-          ? {
-              'Content-Type': 'application/json',
-              'x-api-key': API_KEY,
-              'anthropic-version': '2023-06-01',
-            }
-          : {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${API_KEY}`,
-            },
-        body: JSON.stringify(
-          isAnthropic
-            ? {
-                model: MODEL,
-                max_tokens: maxTokens,
-                messages: [{ role: 'user', content: prompt }],
-              }
-            : {
-                model: MODEL,
-                temperature: 0.6,
-                messages: [{ role: 'user', content: prompt }],
-              },
-        ),
+    const response = await fetch(`${normalizeBaseUrl()}/chat/completions`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`,
       },
-    )
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{ role: 'user', content: messageContent }],
+      }),
+    })
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -208,19 +164,8 @@ export async function callModel(prompt: string, maxTokens = 600): Promise<string
     }
 
     const payload = (await response.json()) as unknown
-
-    if (isAnthropic) {
-      const data = payload as AnthropicResponse
-      const text = extractTextFromContent(data.content)
-      if (!text.trim()) {
-        throw new Error('The Agnes response was empty.')
-      }
-
-      return text
-    }
-
     const data = payload as OpenAICompletionResponse
-    const text = extractTextFromContent(data.choices?.[0]?.message?.content)
+    const text = data.choices?.[0]?.message?.content ?? ''
     if (!text.trim()) {
       throw new Error('The Agnes response was empty.')
     }
@@ -506,10 +451,14 @@ function buildPersonaPrompt(
   postText: string,
   platform: Platform,
   region: Region,
+  hasImage: boolean,
 ): string {
   const seaContext = region === 'singapore' ? SEA_CONTEXT : ''
+  const imagePreamble = hasImage
+    ? 'The user has attached a screenshot of their draft post. Read the post from the image if text extraction is needed.\n'
+    : ''
 
-  return `You are simulating a specific social media user reacting to a draft post.
+  return `${imagePreamble}You are simulating a specific social media user reacting to a draft post.
 
 Persona: ${personaName}
 Platform: ${platform}
@@ -553,6 +502,7 @@ export async function simulatePersona(
   postText: string,
   platform: Platform,
   region: Region,
+  imageBase64?: string,
 ): Promise<PersonaReaction> {
   if (isDemoMode()) {
     await sleep(DEMO_DELAY_MS[personaName])
@@ -560,7 +510,9 @@ export async function simulatePersona(
   }
 
   const raw = await callModel(
-    buildPersonaPrompt(personaName, postText, platform, region),
+    buildPersonaPrompt(personaName, postText, platform, region, !!imageBase64),
+    600,
+    imageBase64,
   )
   const parsed = parseRecoveredJson(raw)
   const reaction = sanitizePersonaReaction(parsed, personaName)
@@ -595,6 +547,60 @@ export async function runSynthesisAgent(
   return buildFallbackSynthesis(
     'The synthesis agent answered, but the JSON shape was invalid.',
   )
+}
+
+export async function rewritePost(
+  postText: string,
+  platform: Platform,
+  region: Region,
+  synthesis: SynthesisResult,
+  personas: PersonaReaction[],
+): Promise<string> {
+  if (isDemoMode()) {
+    await sleep(1200)
+    let rewritten = postText
+    let changed = false
+    if (postText.includes('useless')) {
+      rewritten = rewritten.replace(/useless/g, 'evolving')
+      changed = true
+    }
+    if (postText.includes('expensive')) {
+      rewritten = rewritten.replace(/expensive/g, 'increasingly expensive')
+      changed = true
+    }
+    if (postText.includes('disaster')) {
+      rewritten = rewritten.replace(/disaster/g, 'significant challenge')
+      changed = true
+    }
+    if (changed) {
+      return `Honest reflection: ${rewritten} Curious what others think.`
+    }
+    return `Here's a revised take: ${postText.slice(0, Math.floor(postText.length * 0.85))} — though I'd love to hear pushback on this.`
+  }
+
+  const negativeConcerns = personas
+    .filter((p) => p.risk !== 'low')
+    .map((p) => `- ${p.name} (${p.tone}): ${p.reasoning}`)
+    .join('\n')
+
+  const prompt = `You are an expert social media editor. Rewrite the following draft post to significantly reduce its PR risk while preserving the core message and the author's voice.
+
+Original post: "${postText}"
+Platform: ${platform}
+Risk identified: ${synthesis.risk_level} — ${synthesis.what_could_go_wrong}
+Who would amplify negatively: ${synthesis.who_amplifies}
+Persona concerns:
+${negativeConcerns}
+${region === 'singapore' ? 'Audience is Singaporean — keep SEA cultural tone natural.' : ''}
+
+Rewrite rules:
+- Keep the same core idea and intent
+- Reduce language that could be read as arrogant, dismissive, or inflammatory
+- Do NOT make it bland or corporate — keep personality
+- Match the original length roughly (±20%)
+- Return ONLY the rewritten post text, no explanation, no quotes, no preamble`
+
+  return callModel(prompt, 600)
 }
 
 export { buildFallbackReaction, buildFallbackSynthesis, PERSONA_ORDER }

@@ -19,6 +19,8 @@ type ResultsPageProps = {
   onBackToEditor: () => void
   onReAnalyze: () => void
   onRunPipeline?: () => void
+  onAiRewrite?: () => void
+  isRewriting?: boolean
 }
 
 function formatPlatform(platform: Platform): string {
@@ -31,18 +33,6 @@ function formatPlatform(platform: Platform): string {
   }
 
   return 'Instagram'
-}
-
-function recommendationLabel(recommendation: SynthesisResult['recommendation']) {
-  if (recommendation === 'post') {
-    return 'Post it'
-  }
-
-  if (recommendation === 'edit') {
-    return 'Edit first'
-  }
-
-  return 'Reconsider'
 }
 
 function recommendationSupportText(
@@ -83,6 +73,8 @@ function ResultsPage({
   onBackToEditor,
   onReAnalyze,
   onRunPipeline,
+  onAiRewrite,
+  isRewriting,
 }: ResultsPageProps) {
   const hasRun = submittedText.trim().length > 0
   const readyReactions = personaStates
@@ -311,27 +303,27 @@ function ResultsPage({
                     <p className="recommendation-copy">
                       {recommendationSupportText(synthesis.recommendation)}
                     </p>
-                    <button
-                      className={`recommendation-button recommendation-${synthesis.recommendation}`}
-                      type="button"
-                      title="This is a display indicator, not an action"
-                    >
-                      {recommendationLabel(synthesis.recommendation)}
-                    </button>
-                    {onRunPipeline && synthesis.risk_level !== 'low' ? (
-                      <div className="pipeline-cta">
+                    <div className="recommendation-buttons-row">
+                      {onAiRewrite ? (
                         <button
-                          className="pipeline-run-button"
                           type="button"
+                          className="btn-ai-rewrite"
+                          disabled={isRewriting}
+                          onClick={onAiRewrite}
+                        >
+                          {isRewriting ? 'Rewriting...' : '🤖 AI Rewrite'}
+                        </button>
+                      ) : null}
+                      {onRunPipeline && synthesis.risk_level !== 'low' ? (
+                        <button
+                          type="button"
+                          className="btn-run-pipeline"
                           onClick={onRunPipeline}
                         >
-                          🤖 Run autonomous protection
+                          🛡 Run Autonomous Protection
                         </button>
-                        <p className="pipeline-cta-note">
-                          Agnes will monitor and act autonomously
-                        </p>
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
                   </div>
                 </>
               ) : null}
