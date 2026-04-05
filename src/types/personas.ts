@@ -25,11 +25,6 @@ export interface SynthesisResult {
   recommendation: 'post' | 'edit' | 'reconsider'
 }
 
-export interface SimulationResult {
-  personas: PersonaReaction[]
-  synthesis: SynthesisResult
-}
-
 export type PersonaCardState = {
   name: PersonaName
   status: 'idle' | 'loading' | 'ready'

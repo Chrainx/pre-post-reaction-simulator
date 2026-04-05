@@ -1,6 +1,6 @@
 export type MonitorStatus = 'idle' | 'running' | 'flagged' | 'safe' | 'taken-down'
 
-export type CommentCategory = 'support' | 'constructive' | 'spam' | 'abuse' | 'urgent'
+export type CommentCategory = 'support' | 'constructive' | 'abuse' | 'urgent'
 
 export interface GeneratedComment {
   id: string
@@ -16,7 +16,6 @@ export interface TakedownDecision {
   reasoning: string
   abuseCount: number
   urgentCount: number
-  spamCount: number
   supportCount: number
 }
 

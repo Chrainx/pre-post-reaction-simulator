@@ -105,7 +105,6 @@ function PipelinePage({
 
   const abuseCount = generatedComments.filter((c) => c.category === 'abuse').length
   const urgentCount = generatedComments.filter((c) => c.category === 'urgent').length
-  const spamCount = generatedComments.filter((c) => c.category === 'spam').length
   const supportCount = generatedComments.filter((c) => c.category === 'support').length
 
   const elapsedMs =
@@ -195,18 +194,13 @@ function PipelinePage({
                 <span className="formula-points formula-points-up">+15 pts</span>
               </div>
               <div className="formula-row">
-                <span className="formula-dot formula-dot-spam" />
-                <span className="formula-type">Spam / bot comment</span>
-                <span className="formula-points formula-points-up">+5 pts</span>
-              </div>
-              <div className="formula-row">
                 <span className="formula-dot formula-dot-support" />
                 <span className="formula-type">Supportive comment</span>
-                <span className="formula-points formula-points-down">−5 pts <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(max −20)</span></span>
+                <span className="formula-points formula-points-down">−2 pts</span>
               </div>
             </div>
             <p className="formula-note">
-              Score is clamped 0–100. Agnes acts when it reaches <strong>{threshold}</strong>. At this threshold, for example, {exampleAbuse} abuse + {exampleUrgent} urgent comment{exampleUrgent === 1 ? '' : 's'} would trigger a takedown.
+              Score is clamped 0–100. Enough support can fully offset negative signals — no cap. Agnes acts when the score reaches <strong>{threshold}</strong>. At this threshold, for example, {exampleAbuse} abuse + {exampleUrgent} urgent comment{exampleUrgent === 1 ? '' : 's'} would trigger a takedown.
             </p>
           </div>
 
@@ -308,8 +302,6 @@ function PipelinePage({
               <span>🔴 {abuseCount} abuse</span>
               <span style={{ color: 'var(--border-strong)' }}>·</span>
               <span>🟠 {urgentCount} urgent</span>
-              <span style={{ color: 'var(--border-strong)' }}>·</span>
-              <span>🟡 {spamCount} spam</span>
               <span style={{ color: 'var(--border-strong)' }}>·</span>
               <span>🟢 {supportCount} support</span>
             </div>

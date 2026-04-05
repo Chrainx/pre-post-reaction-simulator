@@ -1032,7 +1032,6 @@
 
 .comment-entry-support     { border-left-color: #1d9e75; }
 .comment-entry-constructive { border-left-color: #888780; }
-.comment-entry-spam        { border-left-color: #ef9f27; }
 .comment-entry-abuse       { border-left-color: #e24b4a; }
 .comment-entry-urgent      { border-left-color: #e24b4a; }
 
@@ -1049,7 +1048,6 @@
 
 .category-chip-support      { background: rgba(29, 158, 117, 0.14); color: #176f54; }
 .category-chip-constructive { background: rgba(136, 135, 128, 0.14); color: #5f574f; }
-.category-chip-spam         { background: #faeeda; color: #9a6207; }
 .category-chip-abuse        { background: #fcebeb; color: #9c2e2e; }
 .category-chip-urgent       { background: #fcebeb; color: #9c2e2e; }
 
@@ -1435,7 +1433,6 @@
 
 .formula-dot-urgent  { background: #ef9f27; }
 .formula-dot-abuse   { background: #e24b4a; }
-.formula-dot-spam    { background: #d4a017; }
 .formula-dot-support { background: #1d9e75; }
 
 .formula-type {

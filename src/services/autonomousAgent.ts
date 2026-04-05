@@ -83,53 +83,187 @@ function computePipelineRiskScore(comments: GeneratedComment[]): number {
   for (const c of comments) {
     if (c.category === 'abuse') score += 15
     else if (c.category === 'urgent') score += 20
-    else if (c.category === 'spam') score += 5
-    else if (c.category === 'support') supportDeduction = Math.min(20, supportDeduction + 5)
+    // spam: ignored — bots don't reflect real sentiment
+    else if (c.category === 'support') supportDeduction += 2
   }
   return Math.max(0, Math.min(100, score - supportDeduction))
 }
 
-const DEMO_COMMENT_WAVE: string[] = [
-  'This is actually a really good take, fully agree',
-  'Lah this one quite bold sia, respect the honesty',
-  'Absolute garbage, ratio incoming',
-  'Can you provide sources for this claim?',
-  'Buy 10k followers at bot-shop.io code PROMO50',
-  "I've shared this with my whole team, so good",
-  'People like you are the problem with society honestly',
-  "I'm screenshotting this and sending to your employer",
-  "This is misinformation and I'm reporting it",
-  'Finally someone said it!! Saving this post',
-  'Imagine thinking this is a hot take lmao',
-  'Unfollowing, this used to be good content',
-  'SPAM SPAM FREE GIFT CARDS followme.biz SPAM',
-  'This caused real harm to people in my community',
-  'Not sure I agree but interesting perspective',
-]
+// Build demo comments that actually reference the post and are weighted by risk level
+function buildDemoCommentWave(
+  postText: string,
+  synthesis: SynthesisResult,
+  region: Region,
+): string[] {
+  const preview = postText.length > 70 ? `${postText.slice(0, 67)}...` : postText
+  const sea = region === 'singapore'
+  const risk = synthesis.risk_level
+
+  // High risk → heavy negative skew (~65% negative, 20% neutral, 15% supportive)
+  // Medium risk → ~40% negative, 35% neutral, 25% supportive
+  // Low risk → ~15% negative, 35% neutral, 50% supportive
+  if (risk === 'high') {
+    return [
+      `This is exactly the kind of post that gets people fired. Think before you tweet.`,
+      sea ? `Wah lao, you really posted this? Cannot lah.` : `Genuinely can't believe you thought this was okay to say publicly.`,
+      `I'm screenshotting this and sending it to your employer.`,
+      `The audacity is unreal. Ratio incoming.`,
+      `This caused real harm to people in my community. Take it down.`,
+      `Reporting this. This is exactly the kind of content that shouldn't be on this platform.`,
+      `"${preview}" — did you actually think about who this affects?`,
+      `People like you are exactly why this platform is toxic.`,
+      sea ? `Alamak, so tone deaf sia. Your PR team must be crying.` : `Your PR team is going to have a very long day.`,
+      `Unfollowing. I used to respect this account.`,
+      `Not gonna lie, I see the point but the wording is really bad.`,
+      `Interesting take but I can see why people are upset.`,
+      `Okay I actually agree with the core point, even if badly put.`,
+      `Bold of you to post this. Respect the honesty at least.`,
+      sea ? `Eh, give chance lah, at least they're being real.` : `Finally someone saying this out loud, even if clumsy.`,
+    ]
+  }
+
+  if (risk === 'medium') {
+    return [
+      `"${preview}" — not sure I fully agree with this framing.`,
+      sea ? `Hmm, quite bold take sia. Got some points but also some holes.` : `Bold take. I see where you're coming from but it's more nuanced than this.`,
+      `This is going to be misread by a lot of people.`,
+      `Can you provide sources or context for this claim?`,
+      `The intent is fine but the wording is going to backfire.`,
+      `I've shared this with some people and reactions are very mixed.`,
+      `Okay the core message is valid but the way it's said is the problem.`,
+      sea ? `Wah, some people are going to take this out of context leh.` : `People are going to screenshot the worst part of this.`,
+      `Interesting perspective. Disagree on the specifics though.`,
+      `This is a bit much but I get the frustration.`,
+      `Actually agree with this 100%. Well said.`,
+      sea ? `Finally someone said it! Shiok.` : `Finally someone with the guts to say this out loud.`,
+      `This is the take I needed today. Saving this.`,
+      `Couldn't agree more. Sharing this.`,
+      sea ? `Very good point lah, people just don't want to hear it.` : `Not sure I agree but this is worth discussing.`,
+    ]
+  }
+
+  // low risk
+  return [
+    `This is really well put. Fully agree.`,
+    sea ? `Alamak, finally someone said it! Lah this is so real.` : `This is exactly the kind of content I follow this account for.`,
+    `Sharing this with my whole team. So good.`,
+    `This resonates deeply. Thank you for posting.`,
+    `100%. No notes.`,
+    sea ? `Wah very good point sia, more people need to see this.` : `More people need to see this. Bookmarked.`,
+    `This is beautifully said. The nuance here is appreciated.`,
+    `"${preview}" — exactly this. Couldn't have said it better.`,
+    `I've been thinking about this for ages and you nailed it.`,
+    `Love this perspective. Following.`,
+    `Not sure I fully agree on every point but this is a good conversation starter.`,
+    `Hmm, interesting. What about [edge case]? Curious your take.`,
+    sea ? `Quite true leh, but got one part I not so sure about.` : `The first half is great, the second part I'm less sure about.`,
+    `Thoughtful post. A bit too optimistic but I appreciate the framing.`,
+    `Good take overall, though I'd push back on the framing slightly.`,
+  ]
+}
+
+// Demo classifier: uses synthesis-driven expectations + simple heuristics
+// Classifies relative to the post (supporting the poster vs criticizing them)
+function demoCategorize(
+  text: string,
+  synthesis: SynthesisResult,
+): Pick<GeneratedComment, 'risk' | 'category'> {
+  const lower = text.toLowerCase()
+
+  // Urgent signals: threats, doxxing, reporting, platform action
+  if (
+    lower.includes('employer') ||
+    lower.includes('screenshotting') ||
+    lower.includes('reporting this') ||
+    lower.includes('real harm') ||
+    lower.includes('take it down') ||
+    lower.includes('shouldn\'t be on this platform')
+  ) {
+    return { risk: 'high', category: 'urgent' }
+  }
+
+  // Abuse: hostile, personal attacks, dismissive
+  if (
+    lower.includes('ratio') ||
+    lower.includes('audacity') ||
+    lower.includes('toxic') ||
+    lower.includes('people like you') ||
+    lower.includes('unfollowing') ||
+    lower.includes('cannot lah') ||
+    lower.includes('fired') ||
+    lower.includes('tone deaf') ||
+    lower.includes('unreal') ||
+    lower.includes('wah lao')
+  ) {
+    return { risk: 'high', category: 'abuse' }
+  }
+
+  // Support: agrees with, praises, shares
+  if (
+    lower.includes('fully agree') ||
+    lower.includes('100%') ||
+    lower.includes('finally someone said') ||
+    lower.includes('sharing this') ||
+    lower.includes('well put') ||
+    lower.includes('resonates') ||
+    lower.includes('bookmarked') ||
+    lower.includes('saving this') ||
+    lower.includes('no notes') ||
+    lower.includes('nailed it') ||
+    lower.includes('beautiful') ||
+    lower.includes('shiok') ||
+    lower.includes('so real')
+  ) {
+    return { risk: 'low', category: 'support' }
+  }
+
+  // Default: constructive (mild pushback, questions, nuanced)
+  // Risk level based on synthesis — a medium/high risk post makes even neutral comments riskier
+  const risk = synthesis.risk_level === 'high' ? 'medium' : 'low'
+  return { risk, category: 'constructive' }
+}
 
 async function generateCommentWave(
   postText: string,
   personas: PersonaReaction[],
+  synthesis: SynthesisResult,
   region: Region,
 ): Promise<string[]> {
   if (isDemoMode()) {
-    return DEMO_COMMENT_WAVE
+    return buildDemoCommentWave(postText, synthesis, region)
   }
 
   const personaSummary = personas
-    .map((p) => `${p.name}: ${p.tone} tone, ${p.risk} risk`)
+    .map((p) => `${p.name}: ${p.tone} tone, ${p.risk} risk — ${p.reasoning}`)
     .join('\n')
 
-  const prompt = `You are simulating the realistic comment section that would appear on a social media post.
-Based on this post and these audience reactions, generate exactly 15 realistic social media comments that this post would receive.
+  // Derive realistic distribution from risk level
+  const distribution =
+    synthesis.risk_level === 'high'
+      ? '~7 critical/hostile, ~4 neutral/questioning, ~4 supportive'
+      : synthesis.risk_level === 'medium'
+        ? '~5 critical/questioning, ~5 neutral, ~5 supportive'
+        : '~3 critical, ~4 neutral/questioning, ~8 supportive'
+
+  const prompt = `You are simulating the realistic comment section for a social media post.
 
 Post: "${postText}"
-Platform audience reactions summary:
+Risk assessment: ${synthesis.risk_level} risk — ${synthesis.what_could_go_wrong}
+Audience reactions:
 ${personaSummary}
-Region: ${region === 'singapore' ? 'Singapore/SEA — include Singlish naturally' : 'Global'}
+Region: ${region === 'singapore' ? 'Singapore/SEA — include Singlish naturally where authentic' : 'Global'}
 
-Generate a realistic mix: some supportive, some critical, some abusive if the reactions suggest it, some spam bots, some urgent/serious complaints if relevant.
-Make them feel like real internet comments — varied length, casual tone, typos ok.
+Generate exactly 15 realistic comments that this specific post would actually receive.
+Distribution: ${distribution}
+
+Rules:
+- Every comment must be a reaction to THIS specific post — reference its actual content or claims
+- NO generic comments that could apply to any post
+- NO spam or bot comments
+- Critical comments should challenge the post's argument specifically
+- Supportive comments should agree with the post's specific point
+- Varied length, casual internet tone, occasional typos ok
+- ${region === 'singapore' ? 'Naturally mix in Singlish for some comments' : ''}
 
 Return JSON only — array of 15 strings:
 ["comment 1", "comment 2", ...]`
@@ -137,7 +271,7 @@ Return JSON only — array of 15 strings:
   try {
     const raw = await callModel(prompt, 1500)
     const extracted = extractJsonArray(raw)
-    if (!extracted) return DEMO_COMMENT_WAVE
+    if (!extracted) return buildDemoCommentWave(postText, synthesis, region)
     const parsed = JSON.parse(extracted) as unknown
     if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
       return parsed as string[]
@@ -145,11 +279,14 @@ Return JSON only — array of 15 strings:
   } catch {
     // fall through to demo
   }
-  return DEMO_COMMENT_WAVE
+  return buildDemoCommentWave(postText, synthesis, region)
 }
 
+// Classifies in the context of the post — is this comment supporting the poster or criticising them?
 async function classifyComment(
   text: string,
+  postText: string,
+  synthesis: SynthesisResult,
 ): Promise<Pick<GeneratedComment, 'risk' | 'category'>> {
   const fallback: Pick<GeneratedComment, 'risk' | 'category'> = {
     risk: 'medium',
@@ -157,54 +294,34 @@ async function classifyComment(
   }
 
   if (isDemoMode()) {
-    const lower = text.toLowerCase()
-    if (
-      lower.includes('employer') ||
-      lower.includes('screenshot') ||
-      lower.includes('report') ||
-      lower.includes('harm') ||
-      lower.includes('misinformation')
-    ) {
-      return { risk: 'high', category: 'urgent' }
-    }
-    if (
-      lower.includes('garbage') ||
-      lower.includes('ratio') ||
-      lower.includes('problem with society') ||
-      lower.includes('unfollowing')
-    ) {
-      return { risk: 'high', category: 'abuse' }
-    }
-    if (
-      lower.includes('bot') ||
-      lower.includes('promo') ||
-      lower.includes('spam') ||
-      lower.includes('followers') ||
-      lower.includes('.biz') ||
-      lower.includes('.io')
-    ) {
-      return { risk: 'low', category: 'spam' }
-    }
-    if (
-      lower.includes('agree') ||
-      lower.includes('good') ||
-      lower.includes('great') ||
-      lower.includes('finally') ||
-      lower.includes('saving') ||
-      lower.includes('team') ||
-      lower.includes('respect')
-    ) {
-      return { risk: 'low', category: 'support' }
-    }
-    return fallback
+    return demoCategorize(text, synthesis)
   }
 
   try {
-    const prompt = `Classify this social media comment. Return JSON only:
-{"risk": "low|medium|high", "category": "support|constructive|spam|abuse|urgent"}
-Comment: "${text}"`
+    const prompt = `You are a content moderation classifier. Classify the comment below in the context of the original post.
 
-    const raw = await callModel(prompt, 80)
+Original post: "${postText}"
+Comment: "${text}"
+
+Determine:
+1. Does this comment SUPPORT the poster's view, or CRITICISE/ATTACK it?
+2. How harmful is it to the poster's reputation?
+
+Categories (pick exactly one):
+- support: agrees with, defends, or praises the original post
+- constructive: neutral question, mild disagreement, no hostility
+- abuse: hostile attack on the poster, mocking, dismissive, personal
+- urgent: threats, doxxing attempts, calls to report/deplatform, claims of serious harm caused
+
+Risk:
+- low: no reputational threat
+- medium: some pushback, minor negative signal
+- high: serious threat to poster's reputation or safety
+
+Return JSON only:
+{"risk": "low|medium|high", "category": "support|constructive|abuse|urgent"}`
+
+    const raw = await callModel(prompt, 100)
     const extracted = extractFirstJsonObject(raw)
     if (!extracted) return fallback
 
@@ -212,7 +329,7 @@ Comment: "${text}"`
     if (!isRecord(parsed)) return fallback
 
     const riskValues = ['low', 'medium', 'high']
-    const categoryValues = ['support', 'constructive', 'spam', 'abuse', 'urgent']
+    const categoryValues = ['support', 'constructive', 'abuse', 'urgent']
 
     const risk = riskValues.includes(parsed.risk as string)
       ? (parsed.risk as GeneratedComment['risk'])
@@ -236,11 +353,10 @@ async function makeTakedownDecision(
 ): Promise<TakedownDecision> {
   const abuseCount = comments.filter((c) => c.category === 'abuse').length
   const urgentCount = comments.filter((c) => c.category === 'urgent').length
-  const spamCount = comments.filter((c) => c.category === 'spam').length
   const supportCount = comments.filter((c) => c.category === 'support').length
   const riskScore = Math.max(
     0,
-    Math.min(100, abuseCount * 15 + urgentCount * 20 + spamCount * 5 - Math.min(supportCount * 5, 20)),
+    Math.min(100, abuseCount * 15 + urgentCount * 20 - supportCount * 2),
   )
 
   if (isDemoMode()) {
@@ -252,7 +368,6 @@ async function makeTakedownDecision(
         reasoning: `Agnes detected ${abuseCount} abusive comments and ${urgentCount} urgent flags. Aggregate risk score ${riskScore}/100 exceeds the safety threshold of ${threshold}. Autonomous takedown initiated to protect account reputation.`,
         abuseCount,
         urgentCount,
-        spamCount,
         supportCount,
       }
     }
@@ -262,7 +377,6 @@ async function makeTakedownDecision(
       reasoning: `Comment wave analysis shows ${supportCount} supportive reactions outweigh negative signals. Risk score ${riskScore}/100 is within the acceptable threshold of ${threshold}. Post is safe to remain live.`,
       abuseCount,
       urgentCount,
-      spamCount,
       supportCount,
     }
   }
@@ -271,7 +385,7 @@ async function makeTakedownDecision(
 
 Original post: "${postText}"
 Pre-post risk assessment: ${synthesis.risk_level} risk — "${synthesis.what_could_go_wrong}"
-Comment analysis: ${abuseCount} abusive, ${urgentCount} urgent/serious, ${spamCount} spam, ${supportCount} supportive
+Comment analysis: ${abuseCount} abusive, ${urgentCount} urgent/serious, ${supportCount} supportive
 Aggregate risk score: ${riskScore}/100
 Takedown threshold: ${threshold}/100
 
@@ -285,7 +399,6 @@ Return JSON only:
   "reasoning": "2-3 sentence explanation of the decision",
   "abuseCount": ${abuseCount},
   "urgentCount": ${urgentCount},
-  "spamCount": ${spamCount},
   "supportCount": ${supportCount}
 }`
 
@@ -307,7 +420,7 @@ Return JSON only:
         ? parsed.reasoning
         : `Autonomous decision based on risk score ${riskScore}/100.`
 
-    return { action, riskScore, reasoning, abuseCount, urgentCount, spamCount, supportCount }
+    return { action, riskScore, reasoning, abuseCount, urgentCount, supportCount }
   } catch {
     return {
       action: riskScore >= threshold ? 'take-down' : 'post-safe',
@@ -315,7 +428,6 @@ Return JSON only:
       reasoning: `Autonomous decision based on risk score ${riskScore}/100. ${riskScore >= threshold ? 'Takedown initiated.' : 'Post remains live.'}`,
       abuseCount,
       urgentCount,
-      spamCount,
       supportCount,
     }
   }
@@ -391,7 +503,7 @@ export async function runAutonomousPipeline(
   onProgress({ ...state })
   if (demo) await sleep(2500)
 
-  const rawComments = await generateCommentWave(postText, personas, region)
+  const rawComments = await generateCommentWave(postText, personas, synthesis, region)
 
   log('Agent 7', `Generated ${rawComments.length} comments — beginning classification`, 'success')
   state = { ...state, currentAgent: 8 }
@@ -403,7 +515,7 @@ export async function runAutonomousPipeline(
 
   for (let i = 0; i < rawComments.length; i++) {
     const text = rawComments[i]
-    const { risk, category } = await classifyComment(text)
+    const { risk, category } = await classifyComment(text, postText, synthesis)
 
     const comment: GeneratedComment = {
       id: generateId(),
