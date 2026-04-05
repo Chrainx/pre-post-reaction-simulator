@@ -17,12 +17,15 @@ type ComposePageProps = {
   canViewResults: boolean
   noticeMessage: string | null
   examplePosts: string[]
+  uploadedImage: string | null
   onInputChange: (value: string) => void
   onPlatformChange: (value: Platform) => void
   onRegionToggle: () => void
   onAnalyze: (event: FormEvent<HTMLFormElement>) => void
   onViewResults: () => void
   onExampleSelect: (post: string) => void
+  onImageUpload: (base64: string) => void
+  onImageClear: () => void
 }
 
 function ComposePage({
@@ -34,13 +37,25 @@ function ComposePage({
   canViewResults,
   noticeMessage,
   examplePosts,
+  uploadedImage,
   onInputChange,
   onPlatformChange,
   onRegionToggle,
   onAnalyze,
   onViewResults,
   onExampleSelect,
+  onImageUpload,
+  onImageClear,
 }: ComposePageProps) {
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') onImageUpload(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
   const singaporeMode = region === 'singapore'
   const analyzeDisabled = !input.trim() || isAnalyzing
   const characterCount = input.length
@@ -132,7 +147,7 @@ function ComposePage({
           {noticeMessage ? (
             <div className="notice-banner" role="alert">
               {demoMode
-                ? `${noticeMessage}. Demo mode uses built-in sample reactions until you add your Agnes API key.`
+                ? 'Please set your Agnes AI (ZenMux) API key in .env. Demo mode is active — get your key at the workshop session.'
                 : noticeMessage}
             </div>
           ) : null}
@@ -156,6 +171,25 @@ function ComposePage({
                 placeholder="Type or paste the post you want Agnes-Claw to analyze..."
                 rows={8}
               />
+
+              <div className="image-upload-row">
+                <label className="image-upload-label">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="image-upload-input"
+                    onChange={handleImageUpload}
+                  />
+                  <span>📎 Attach post screenshot (optional)</span>
+                </label>
+                {uploadedImage && (
+                  <div className="image-preview">
+                    <img src={uploadedImage} alt="Post screenshot" />
+                    <button type="button" onClick={onImageClear}>Remove</button>
+                  </div>
+                )}
+              </div>
+
               <div className="composer-meta-row">
                 <p
                   className={`character-counter ${

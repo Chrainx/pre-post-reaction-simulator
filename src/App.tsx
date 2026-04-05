@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import ComposePage from './ComposePage'
 import PipelinePage from './PipelinePage'
 import ResultsPage from './ResultsPage'
+import RewriteModal from './RewriteModal'
 import {
   PERSONA_ORDER,
   buildFallbackReaction,
@@ -11,6 +12,7 @@ import {
   isDemoMode,
   runSynthesisAgent,
   simulatePersona,
+  rewritePost,
 } from './services/agnesApi'
 import type {
   PersonaCardState,
@@ -79,6 +81,10 @@ function App() {
   const [pipelineState, setPipelineState] = useState<AutonomousPipelineState>(
     () => createInitialPipelineState(60),
   )
+  const [showRewriteModal, setShowRewriteModal] = useState(false)
+  const [rewrittenText, setRewrittenText] = useState<string | null>(null)
+  const [isRewriting, setIsRewriting] = useState(false)
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const runIdRef = useRef(0)
 
   const hasLatestResults = submittedText.trim().length > 0
@@ -111,6 +117,7 @@ function App() {
     nextText: string,
     nextPlatform: Platform,
     nextRegion: Region,
+    imageBase64?: string,
   ) => {
     const trimmedInput = nextText.trim()
     if (!trimmedInput) {
@@ -135,7 +142,7 @@ function App() {
 
     try {
       const personaPromises = PERSONA_ORDER.map((personaName) =>
-        simulatePersona(personaName, trimmedInput, nextPlatform, nextRegion)
+        simulatePersona(personaName, trimmedInput, nextPlatform, nextRegion, imageBase64 ?? undefined)
           .then((reaction) => {
             updatePersonaCard(runId, personaName, reaction)
             return reaction
@@ -189,7 +196,7 @@ function App() {
   // Issue #7: update persona cards incrementally while the full Promise.all batch resolves.
   const handleAnalyze = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    await runAnalysis(input, platform, region)
+    await runAnalysis(input, platform, region, uploadedImage ?? undefined)
   }
 
   const handleReAnalyze = async () => {
@@ -205,12 +212,49 @@ function App() {
     setView('pipeline')
   }
 
+  const handleAiRewrite = async () => {
+    if (!completedSynthesis || !submittedText) return
+    setIsRewriting(true)
+    setShowRewriteModal(true)
+    setRewrittenText(null)
+    try {
+      const result = await rewritePost(
+        submittedText,
+        lastPlatform,
+        lastRegion,
+        completedSynthesis,
+        completedPersonas,
+      )
+      setRewrittenText(result)
+    } catch {
+      setRewrittenText('Agnes could not generate a rewrite. Please try again.')
+    } finally {
+      setIsRewriting(false)
+    }
+  }
+
+  const handleAcceptRewrite = (text: string) => {
+    setInput(text)
+    setShowRewriteModal(false)
+    setRewrittenText(null)
+    setView('compose')
+  }
+
   const canRunPipeline =
     completedSynthesis !== null &&
     (completedSynthesis.risk_level === 'medium' || completedSynthesis.risk_level === 'high')
 
   return (
     <main className="app-shell">
+      {showRewriteModal && (
+        <RewriteModal
+          originalText={submittedText}
+          rewrittenText={rewrittenText ?? ''}
+          isLoading={isRewriting}
+          onAccept={handleAcceptRewrite}
+          onDismiss={() => { setShowRewriteModal(false); setRewrittenText(null) }}
+        />
+      )}
       {view === 'compose' ? (
         <ComposePage
           input={input}
@@ -221,6 +265,7 @@ function App() {
           canViewResults={hasLatestResults}
           noticeMessage={errorMessage ?? configError}
           examplePosts={EXAMPLE_POSTS}
+          uploadedImage={uploadedImage}
           onInputChange={setInput}
           onPlatformChange={setPlatform}
           onRegionToggle={() =>
@@ -231,6 +276,8 @@ function App() {
           onAnalyze={handleAnalyze}
           onViewResults={() => setView('results')}
           onExampleSelect={handleExampleSelect}
+          onImageUpload={setUploadedImage}
+          onImageClear={() => setUploadedImage(null)}
         />
       ) : view === 'results' ? (
         <ResultsPage
@@ -245,6 +292,8 @@ function App() {
           onBackToEditor={() => setView('compose')}
           onReAnalyze={handleReAnalyze}
           onRunPipeline={canRunPipeline ? handleRunPipeline : undefined}
+          onAiRewrite={completedSynthesis ? handleAiRewrite : undefined}
+          isRewriting={isRewriting}
         />
       ) : completedSynthesis ? (
         <PipelinePage
