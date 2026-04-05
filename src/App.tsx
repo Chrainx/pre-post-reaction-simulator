@@ -64,10 +64,10 @@ function createInitialPipelineState(threshold = 60): AutonomousPipelineState {
 function App() {
   const [input, setInput] = useState('')
   const [platform, setPlatform] = useState<Platform>('twitter')
-  const [region, setRegion] = useState<Region>('singapore')
+  const [region, setRegion] = useState<Region>('global')
   const [submittedText, setSubmittedText] = useState('')
   const [lastPlatform, setLastPlatform] = useState<Platform>('twitter')
-  const [lastRegion, setLastRegion] = useState<Region>('singapore')
+  const [lastRegion, setLastRegion] = useState<Region>('global')
   const [personaStates, setPersonaStates] =
     useState<PersonaCardState[]>(createIdlePersonaStates())
   const [synthesis, setSynthesis] = useState<SynthesisResult | null>(null)
@@ -225,7 +225,7 @@ function App() {
         completedSynthesis,
         completedPersonas,
       )
-      setRewrittenText(result)
+      setRewrittenText(result.trimStart())
     } catch {
       setRewrittenText('Agnes could not generate a rewrite. Please try again.')
     } finally {

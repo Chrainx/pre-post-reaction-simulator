@@ -101,9 +101,9 @@ function ComposePage({
         </div>
 
         <div className="hero-copy-group">
-          <h1>Pre-Post Reaction Simulator</h1>
+          <h1>Agnes-Claw Risk & Protection</h1>
           <p className="hero-copy">
-            Write your post. Run five audience agents. Know your PR risk.
+            Write your post. Run five audience agents. See the risk, then let Agnes protect it live.
           </p>
         </div>
       </section>
